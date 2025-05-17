@@ -1,0 +1,12 @@
+[target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu@sha256:123c2e9719c5da44454c09142fd0f425249adc4bbb5295a37c80bb6f5dd4dcfa"
+
+[target.x86_64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-musl@sha256:e974e7f622fea262ebe7b94f7e25759bad777d9e57f6297e80a6dc384cb153c4"
+
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu@sha256:08208af8960a81a7a79949b35bd015ce05ae9dee654c94d6923cd5f04052a3b2"
+
+[target.aarch64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-musl@sha256:bc1d3f81b70d04e11b391bd8e466057343edaa7afb9de1e49126ff86ba9692c6"
+

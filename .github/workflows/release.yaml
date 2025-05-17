@@ -8,28 +8,24 @@ on:
 jobs:
   build:
     name: Build ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: linux-amd64
-            runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             cross: false
 
           - name: linux-musl-amd64
-            runner: ubuntu-latest
             target: x86_64-unknown-linux-musl
             cross: false
             
           - name: linux-arm64
-            runner: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             cross: true
             
           - name: linux-musl-arm64
-            runner: ubuntu-latest
             target: aarch64-unknown-linux-musl
             cross: true
             
@@ -74,54 +70,37 @@ jobs:
         id: prepare-artifact
         shell: bash
         run: |
-          BINARY_NAME=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[0].targets[] | select(.kind[] | contains("bin")) | .name' | head -n1)
-          echo "BINARY_NAME=${BINARY_NAME}" >> $GITHUB_ENV
+          # Get the package name directly from Cargo.toml
+          PACKAGE_NAME=$(grep -m 1 '^name\s*=\s*"' Cargo.toml | sed 's/^name\s*=\s*"\(.*\)"/\1/')
           
-          # Determine file extension based on OS
-          if [[ "${{ matrix.name }}" =~ windows ]]; then
-            echo "BINARY_EXT=.exe" >> $GITHUB_ENV
-          else
-            echo "BINARY_EXT=" >> $GITHUB_ENV
+          # If package name extraction fails, fall back to directory name
+          if [ -z "$PACKAGE_NAME" ]; then
+            PACKAGE_NAME=$(basename $(pwd))
+            echo "Warning: Could not determine package name from Cargo.toml, using directory name: $PACKAGE_NAME"
           fi
           
-          echo "ARTIFACT_NAME=${BINARY_NAME}-${{ matrix.name }}" >> $GITHUB_ENV
+          echo "BINARY_NAME=${PACKAGE_NAME}" >> $GITHUB_ENV
+          
+          # Create artifact name with version tag
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "ARTIFACT_NAME=${PACKAGE_NAME}-${VERSION}-${{ matrix.name }}" >> $GITHUB_ENV
+          
+          echo "Package: ${PACKAGE_NAME}"
+          echo "Artifact: ${PACKAGE_NAME}-${VERSION}-${{ matrix.name }}"
       
       - name: Create distribution directory
         shell: bash
         run: |
           mkdir -p dist
-          
-          # Copy binary to dist directory
-          if [[ "${{ matrix.name }}" =~ windows ]]; then
-            cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}${{ env.BINARY_EXT }}" dist/
-          else
-            cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}" dist/
-          fi
+          cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}" dist/
       
-      - name: Create archive (Windows)
-        if: contains(matrix.name, 'windows')
-        shell: bash
-        run: |
-          cd dist
-          7z a -tzip "../${{ env.ARTIFACT_NAME }}.zip" ./*
-      
-      - name: Create archive (Unix)
-        if: "!contains(matrix.name, 'windows')"
+      - name: Create archive
         shell: bash
         run: |
           cd dist
           tar -czvf "../${{ env.ARTIFACT_NAME }}.tar.gz" ./*
       
-      - name: Upload artifact (Windows)
-        if: contains(matrix.name, 'windows')
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: ${{ env.ARTIFACT_NAME }}.zip
-          retention-days: 3
-      
-      - name: Upload artifact (Unix)
-        if: "!contains(matrix.name, 'windows')"
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
@@ -151,5 +130,4 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-
 
