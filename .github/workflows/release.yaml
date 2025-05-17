@@ -1,0 +1,155 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            cross: false
+
+          - name: linux-musl-amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            cross: false
+            
+          - name: linux-arm64
+            runner: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            cross: true
+            
+          - name: linux-musl-arm64
+            runner: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            cross: true
+            
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+          profile: minimal
+
+      - name: Install dependencies for ARM Linux builds
+        if: matrix.name == 'linux-arm64' || matrix.name == 'linux-musl-arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+      
+      - name: Install cross
+        if: matrix.cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+      
+      - name: Build with Cargo (native)
+        if: "!matrix.cross"
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target ${{ matrix.target }}
+          
+      - name: Build with Cross (cross-compilation)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }}
+        
+      - name: Prepare artifact name
+        id: prepare-artifact
+        shell: bash
+        run: |
+          BINARY_NAME=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[0].targets[] | select(.kind[] | contains("bin")) | .name' | head -n1)
+          echo "BINARY_NAME=${BINARY_NAME}" >> $GITHUB_ENV
+          
+          # Determine file extension based on OS
+          if [[ "${{ matrix.name }}" =~ windows ]]; then
+            echo "BINARY_EXT=.exe" >> $GITHUB_ENV
+          else
+            echo "BINARY_EXT=" >> $GITHUB_ENV
+          fi
+          
+          echo "ARTIFACT_NAME=${BINARY_NAME}-${{ matrix.name }}" >> $GITHUB_ENV
+      
+      - name: Create distribution directory
+        shell: bash
+        run: |
+          mkdir -p dist
+          
+          # Copy binary to dist directory
+          if [[ "${{ matrix.name }}" =~ windows ]]; then
+            cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}${{ env.BINARY_EXT }}" dist/
+          else
+            cp "target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}" dist/
+          fi
+      
+      - name: Create archive (Windows)
+        if: contains(matrix.name, 'windows')
+        shell: bash
+        run: |
+          cd dist
+          7z a -tzip "../${{ env.ARTIFACT_NAME }}.zip" ./*
+      
+      - name: Create archive (Unix)
+        if: "!contains(matrix.name, 'windows')"
+        shell: bash
+        run: |
+          cd dist
+          tar -czvf "../${{ env.ARTIFACT_NAME }}.tar.gz" ./*
+      
+      - name: Upload artifact (Windows)
+        if: contains(matrix.name, 'windows')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_NAME }}.zip
+          retention-days: 3
+      
+      - name: Upload artifact (Unix)
+        if: "!contains(matrix.name, 'windows')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_NAME }}.tar.gz
+          retention-days: 3
+          
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          
+      - name: List artifacts
+        run: find ./artifacts -type f | sort
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./artifacts/**/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+
