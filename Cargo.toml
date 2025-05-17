@@ -2,6 +2,7 @@
 name = "urlcount"
 version = "0.1.0"
 edition = "2024"
+description = "Counts unique URLs in GDELT Parquet files"
 
 [profile.release]
 lto = true

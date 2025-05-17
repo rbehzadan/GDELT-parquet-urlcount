@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up command-line argument parsing with clap
     let matches = Command::new("urlcount")
         .version(env!("CARGO_PKG_VERSION"))
-        .about("Counts unique URLs in GDELT Parquet files")
+        .about(env!("CARGO_PKG_DESCRIPTION"))
         .arg(Arg::new("INPUT")
             .help("Input file or directory path")
             .required(true)
