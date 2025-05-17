@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.38", features = ["derive"] }
+indicatif = "0.17.11"
 parquet = "55.1.0"
