@@ -42,6 +42,12 @@ jobs:
           override: true
           profile: minimal
 
+      - name: Install MUSL toolchain for x86_64
+        if: matrix.name == 'linux-musl-amd64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
       - name: Install dependencies for ARM Linux builds
         if: matrix.name == 'linux-arm64' || matrix.name == 'linux-musl-arm64'
         run: |
